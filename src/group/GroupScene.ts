@@ -89,6 +89,7 @@ export class GroupScene extends Phaser.Scene {
       this.scene.start('SessionEndScene', {
         score: this.scoreState.total,
         errors: this.scoreState.errors,
+        fromScene: 'GroupScene',
       })
       return
     }

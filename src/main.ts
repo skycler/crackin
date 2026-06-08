@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { BootScene } from './scenes/BootScene'
 import { SettingsScene } from './scenes/SettingsScene'
+import { MenuScene } from './scenes/MenuScene'
 import { ShooterScene } from './shooter/ShooterScene'
 import { GroupScene } from './group/GroupScene'
 import { RelateScene } from './relate/RelateScene'
@@ -16,7 +17,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 960,
     height: 540,
   },
-  scene: [BootScene, SettingsScene, ShooterScene, GroupScene, RelateScene, SessionEndScene],
+  scene: [BootScene, SettingsScene, MenuScene, ShooterScene, GroupScene, RelateScene, SessionEndScene],
   input: {
     activePointers: 3,
   },

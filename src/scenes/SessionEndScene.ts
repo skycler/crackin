@@ -1,24 +1,31 @@
 import Phaser from 'phaser'
+import { decodeConfig } from '../config/session'
 
 /**
- * SessionEndScene — shown after a session completes.
- * Displays final score and buttons to play again or return to menu.
- * Navigation events are delegated to the game in later issues.
+ * SessionEndScene — shown after any session completes.
+ * Displays final score and routes to play-again or menu/settings.
+ * Routes through MenuScene when multiple modes are active.
  */
 export class SessionEndScene extends Phaser.Scene {
+  private lastScene = 'ShooterScene'
+
   constructor() {
     super({ key: 'SessionEndScene' })
   }
 
-  init(data: { score: number; errors: number }): void {
+  init(data: { score: number; errors: number; fromScene?: string }): void {
     this.registry.set('lastScore', data.score)
     this.registry.set('lastErrors', data.errors)
+    this.lastScene = data.fromScene ?? 'ShooterScene'
   }
 
   create(): void {
     const { width, height } = this.scale
     const score = this.registry.get('lastScore') as number
     const errors = this.registry.get('lastErrors') as number
+
+    const config = decodeConfig(window.location.search.slice(1))
+    const menuTarget = config.modes.length > 1 ? 'MenuScene' : 'SettingsScene'
 
     this.add
       .text(width / 2, height / 2 - 80, 'session complete', {
@@ -45,9 +52,9 @@ export class SessionEndScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    // Play again
+    // Play again — replays the same mode
     const playAgain = this.add
-      .text(width / 2 - 120, height / 2 + 140, '[play again]', {
+      .text(width / 2 - 130, height / 2 + 140, '[play again]', {
         fontSize: '26px',
         fontFamily: 'monospace',
         color: '#3a86ff',
@@ -56,12 +63,13 @@ export class SessionEndScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
 
     playAgain.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
-      this.scene.start('ShooterScene')
+      this.scene.start(this.lastScene)
     })
 
-    // Menu
+    // Menu or settings
+    const menuLabel = config.modes.length > 1 ? '[menu]' : '[settings]'
     const menu = this.add
-      .text(width / 2 + 120, height / 2 + 140, '[menu]', {
+      .text(width / 2 + 130, height / 2 + 140, menuLabel, {
         fontSize: '26px',
         fontFamily: 'monospace',
         color: '#888888',
@@ -70,15 +78,15 @@ export class SessionEndScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
 
     menu.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
-      this.scene.start('SettingsScene')
+      this.scene.start(menuTarget)
     })
 
-    // Keyboard: R = play again, M = menu, Enter = play again
+    // Keyboard: R/Enter = play again, M/S = menu
     this.input.keyboard?.on(
       Phaser.Input.Keyboard.Events.ANY_KEY_DOWN,
       (e: KeyboardEvent) => {
-        if (e.code === 'KeyR' || e.code === 'Enter') this.scene.start('ShooterScene')
-        if (e.code === 'KeyM') this.scene.start('SettingsScene')
+        if (e.code === 'KeyR' || e.code === 'Enter') this.scene.start(this.lastScene)
+        if (e.code === 'KeyM' || e.code === 'KeyS') this.scene.start(menuTarget)
       },
     )
   }

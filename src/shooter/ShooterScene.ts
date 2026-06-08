@@ -398,6 +398,7 @@ export class ShooterScene extends Phaser.Scene {
     this.scene.start('SessionEndScene', {
       score: this.scoreState.total,
       errors: this.scoreState.errors,
+      fromScene: 'ShooterScene',
     })
   }
 }

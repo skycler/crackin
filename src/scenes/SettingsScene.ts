@@ -305,9 +305,14 @@ export class SettingsScene extends Phaser.Scene {
     window.history.replaceState(null, '', url)
 
     // Start the first active mode
-    const first = this.config.modes[0]
-    if (first === 'shooter') this.scene.start('ShooterScene')
-    else if (first === 'group') this.scene.start('GroupScene')
-    else if (first === 'relate') this.scene.start('RelateScene')
+    // If only one mode is active, skip the menu and go directly
+    if (this.config.modes.length === 1) {
+      const first = this.config.modes[0]
+      if (first === 'shooter') this.scene.start('ShooterScene')
+      else if (first === 'group') this.scene.start('GroupScene')
+      else if (first === 'relate') this.scene.start('RelateScene')
+    } else {
+      this.scene.start('MenuScene')
+    }
   }
 }
