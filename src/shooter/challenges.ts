@@ -13,9 +13,9 @@ export interface MulChallenge {
   triple: Triple
   /** The text shown to the player, e.g. "6 × 70 = ?" */
   prompt: string
-  /** The correct answer (scaled by 10^decimalZeros) */
+  /** The correct answer (possibly scaled). */
   answer: number
-  /** Scale factor used to generate same-space distractors (10^decimalZeros). */
+  /** Scale factor used to generate same-space distractors (10^zeros). */
   distractorScale: number
 }
 
@@ -24,9 +24,9 @@ export interface DivChallenge {
   triple: Triple
   /** The text shown to the player, e.g. "420 ÷ 60 = ?" */
   prompt: string
-  /** The correct answer (always an unscaled factor). */
+  /** The correct answer (possibly scaled). */
   answer: number
-  /** Scale factor for distractor generation (always 1 for div challenges). */
+  /** Scale factor for distractor generation (1 when answer is unscaled). */
   distractorScale: number
 }
 
@@ -46,18 +46,15 @@ export type ShooterChallenge = MulChallenge | DivChallenge | ClassifyChallenge
 
 /**
  * Returns all possible Multiplication/Division/Classify challenges for the
- * active drawers in the session config, filtered to the requested types.
- *
- * When decimalZeros > 0, all displayed numbers are scaled by 10^decimalZeros.
- * Mul answers and classify products are scaled; div answers remain unscaled
- * factors so the scale symmetry is always made explicit in the prompt.
+ * active drawers in the session config. All challenges are generated at
+ * scale=1 (no decimal zeros). Call `scaleChallenge` on each picked challenge
+ * to apply random decimal-zero scaling at round time.
  */
 export function buildChallengePool(
-  config: Pick<SessionConfig, 'drawers' | 'shooter' | 'decimalZeros'>,
+  config: Pick<SessionConfig, 'drawers' | 'shooter'>,
 ): ShooterChallenge[] {
   const { drawers, shooter } = config
   const activeTypes = new Set<ShooterChallengeType>(shooter.challenges)
-  const scale = Math.pow(10, config.decimalZeros ?? 0)
 
   const challenges: ShooterChallenge[] = []
 
@@ -70,19 +67,17 @@ export function buildChallengePool(
       challenges.push({
         type: 'mul',
         triple,
-        prompt: `${a} × ${b * scale} = ?`,
-        answer: product * scale,
-        distractorScale: scale,
+        prompt: `${a} × ${b} = ?`,
+        answer: product,
+        distractorScale: 1,
       })
     }
 
     if (activeTypes.has('div')) {
-      // Both divisors are scaled → answer is the complementary unscaled factor.
-      // e.g. scale=10: "420 ÷ 60 = 7"  and  "420 ÷ 70 = 6"
       challenges.push({
         type: 'div',
         triple,
-        prompt: `${product * scale} ÷ ${a * scale} = ?`,
+        prompt: `${product} ÷ ${a} = ?`,
         answer: b,
         distractorScale: 1,
       })
@@ -90,7 +85,7 @@ export function buildChallengePool(
         challenges.push({
           type: 'div',
           triple,
-          prompt: `${product * scale} ÷ ${b * scale} = ?`,
+          prompt: `${product} ÷ ${b} = ?`,
           answer: a,
           distractorScale: 1,
         })
@@ -98,10 +93,10 @@ export function buildChallengePool(
     }
   }
 
-  // Classify challenges — one per active drawer, products scaled
+  // Classify challenges — one per active drawer, unscaled
   if (activeTypes.has('classify')) {
     for (const drawer of drawers) {
-      const classify = buildClassifyChallenge(drawer, drawers, scale)
+      const classify = buildClassifyChallenge(drawer, drawers)
       if (classify) challenges.push(classify)
     }
   }
@@ -110,9 +105,94 @@ export function buildChallengePool(
 }
 
 /**
+ * Applies random decimal-zero scaling to a challenge at round time.
+ *
+ * Randomly picks zeros ∈ {0..maxZeros} and applies 10^zeros to a randomly
+ * chosen factor (a or b). The product scales by the same amount. For division
+ * challenges the prompt and answer are updated to reflect which factor is
+ * scaled. For classify challenges all products are scaled uniformly.
+ *
+ * Returns the original challenge unchanged when maxZeros=0 or zeros=0.
+ */
+export function scaleChallenge(
+  challenge: ShooterChallenge,
+  maxZeros: number,
+  random: () => number = Math.random,
+): ShooterChallenge {
+  if (maxZeros === 0) return challenge
+  const zeros = Math.floor(random() * (maxZeros + 1))
+  if (zeros === 0) return challenge
+  const scale = Math.pow(10, zeros)
+
+  if (challenge.type === 'classify') {
+    return {
+      ...challenge,
+      correctAnswers: challenge.correctAnswers.map((p) => p * scale),
+      distractors: challenge.distractors.map((p) => p * scale),
+    }
+  }
+
+  const { a, b, product } = challenge.triple
+  const applyToA = random() < 0.5
+
+  if (challenge.type === 'mul') {
+    const [fa, fb] = applyToA ? [a * scale, b] : [a, b * scale]
+    return {
+      ...challenge,
+      prompt: `${fa} × ${fb} = ?`,
+      answer: product * scale,
+      distractorScale: scale,
+    }
+  }
+
+  // div: base prompt is "product ÷ divisor = answer"
+  // Determine which factor is divisor vs answer in the base challenge.
+  const baseDivisorIsA = challenge.answer === b
+  const baseDivisor = baseDivisorIsA ? a : b
+  const baseAnswer = challenge.answer
+
+  if (applyToA) {
+    if (baseDivisorIsA) {
+      // Scale divisor (a): (product×s) ÷ (a×s) = b  — answer stays unscaled
+      return {
+        ...challenge,
+        prompt: `${product * scale} ÷ ${baseDivisor * scale} = ?`,
+        answer: baseAnswer,
+        distractorScale: 1,
+      }
+    } else {
+      // Scale answer (a): (product×s) ÷ b = (a×s)
+      return {
+        ...challenge,
+        prompt: `${product * scale} ÷ ${baseDivisor} = ?`,
+        answer: baseAnswer * scale,
+        distractorScale: scale,
+      }
+    }
+  } else {
+    if (!baseDivisorIsA) {
+      // Scale divisor (b): (product×s) ÷ (b×s) = a  — answer stays unscaled
+      return {
+        ...challenge,
+        prompt: `${product * scale} ÷ ${baseDivisor * scale} = ?`,
+        answer: baseAnswer,
+        distractorScale: 1,
+      }
+    } else {
+      // Scale answer (b): (product×s) ÷ a = (b×s)
+      return {
+        ...challenge,
+        prompt: `${product * scale} ÷ ${baseDivisor} = ?`,
+        answer: baseAnswer * scale,
+        distractorScale: scale,
+      }
+    }
+  }
+}
+
+/**
  * Builds one Classify challenge for a given drawer.
  * Returns null if there are not enough products to form a meaningful round.
- * Products in the returned challenge are scaled by `scale` (10^decimalZeros).
  */
 export function buildClassifyChallenge(
   drawer: number,

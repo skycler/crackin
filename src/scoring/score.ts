@@ -66,7 +66,7 @@ export function onCorrect(state: ScoreState, ms: number): ScoreState {
  */
 export function onError(state: ScoreState): ScoreState {
   return {
-    total: state.total,
+    total: state.total - 1,
     streak: 0,
     multiplier: 1,
     errors: state.errors + 1,

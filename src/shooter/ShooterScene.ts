@@ -3,6 +3,7 @@ import { decodeConfig, type SessionConfig } from '../config/session'
 import {
   buildChallengePool,
   pickChallenge,
+  scaleChallenge,
   type ShooterChallenge,
   type ClassifyChallenge,
 } from './challenges'
@@ -157,7 +158,10 @@ export class ShooterScene extends Phaser.Scene {
     this.clearTiles()
 
     // Fair type selection: each active challenge type appears with equal frequency.
-    this.current = pickChallenge(this.pool, this.config.shooter.challenges)
+    this.current = scaleChallenge(
+      pickChallenge(this.pool, this.config.shooter.challenges),
+      this.config.decimalZeros,
+    )
     this.promptText.setText(this.current.prompt)
     this.roundStartMs = Date.now()
 
@@ -177,10 +181,8 @@ export class ShooterScene extends Phaser.Scene {
         ...distractorValues,
       ]) as number[]
 
-      allValues.forEach((value, idx) => {
-        this.time.delayedCall(idx * 300, () => {
-          this.spawnTile(value, value === answer)
-        })
+      allValues.forEach((value) => {
+        this.spawnTile(value, value === answer)
       })
     }
   }
@@ -215,10 +217,8 @@ export class ShooterScene extends Phaser.Scene {
       ...distractors.map((v) => ({ v, correct: false })),
     ]) as { v: number; correct: boolean }[]
 
-    allValues.forEach(({ v, correct }, idx) => {
-      this.time.delayedCall(idx * 280, () => {
-        this.spawnTile(v, correct)
-      })
+    allValues.forEach(({ v, correct }) => {
+      this.spawnTile(v, correct)
     })
   }
 
@@ -249,6 +249,7 @@ export class ShooterScene extends Phaser.Scene {
 
     const container = this.add.container(x, y, [gfx, label])
     container.setSize(RADIUS * 2, RADIUS * 2)
+    // Interactive for Phaser hit-test; clicks are handled centrally in handlePointerDown
     container.setInteractive()
 
     // Random direction, speed controlled by config
@@ -263,30 +264,42 @@ export class ShooterScene extends Phaser.Scene {
       vy: Math.sin(angle) * speed,
     }
 
-    container.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
-      this.handleTileHit(tileData)
-    })
-
     this.tiles.push(tileData)
   }
 
   // ── Input handlers ───────────────────────────────────────────────────────────
 
+  /**
+   * Collects all tiles whose centre is within RADIUS px of the tap point.
+   * If any correct tile is in the set → one correct outcome.
+   * If only wrong tiles → one error (all wrong tiles in set are destroyed).
+   */
   private handlePointerDown(p: Phaser.Input.Pointer): void {
-    let closest: TileData | null = null
-    let minDist = 60
+    const hit: TileData[] = []
 
     for (const tile of this.tiles) {
       const dx = tile.container.x - p.x
       const dy = tile.container.y - p.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < minDist) {
-        minDist = dist
-        closest = tile
+      if (Math.sqrt(dx * dx + dy * dy) < RADIUS) {
+        hit.push(tile)
       }
     }
 
-    if (closest) this.handleTileHit(closest)
+    if (hit.length === 0) return
+
+    const correctTile = hit.find((t) => t.isCorrect)
+    if (correctTile) {
+      this.handleCorrect(correctTile)
+    } else {
+      // Destroy all wrong tiles in hit set but register only one error
+      for (const tile of hit) {
+        this.flashText(tile.container.x, tile.container.y, '✗', '#ff4444')
+        this.destroyTile(tile)
+      }
+      this.scoreState = scoreOnError(this.scoreState)
+      this.scoreText.setText(`score: ${this.scoreState.total}`)
+      this.updateStreakHud()
+    }
   }
 
   private fireAtNearest(): void {
@@ -343,6 +356,7 @@ export class ShooterScene extends Phaser.Scene {
    */
   private handleIncorrect(tile: TileData): void {
     this.scoreState = scoreOnError(this.scoreState)
+    this.scoreText.setText(`score: ${this.scoreState.total}`)
     this.updateStreakHud()
     this.flashText(tile.container.x, tile.container.y, '✗', '#ff4444')
     this.destroyTile(tile)

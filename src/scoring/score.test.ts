@@ -118,10 +118,15 @@ describe('onError', () => {
     expect(s.multiplier).toBe(1)
   })
 
-  it('does not change total', () => {
+  it('deducts 1 from total', () => {
     let s = onCorrect(initialScoreState(), 500)
     const totalBefore = s.total
     s = onError(s)
-    expect(s.total).toBe(totalBefore)
+    expect(s.total).toBe(totalBefore - 1)
+  })
+
+  it('allows total to go negative', () => {
+    const s = onError(initialScoreState())
+    expect(s.total).toBe(-1)
   })
 })

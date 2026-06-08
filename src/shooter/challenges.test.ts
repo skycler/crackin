@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildChallengePool, pickChallenge, basicDistractors, buildClassifyChallenge } from './challenges'
+import { buildChallengePool, pickChallenge, basicDistractors, buildClassifyChallenge, scaleChallenge } from './challenges'
 import type { MulChallenge, DivChallenge } from './challenges'
 import { DEFAULT_CONFIG } from '../config/session'
 
@@ -9,6 +9,11 @@ describe('buildChallengePool', () => {
     expect(pool.length).toBeGreaterThan(0)
   })
 
+  it('generates unscaled base challenges (distractorScale=1)', () => {
+    const config = { ...DEFAULT_CONFIG, shooter: { ...DEFAULT_CONFIG.shooter, challenges: ['mul' as const] } }
+    const pool = buildChallengePool(config)
+    expect(pool.every((c) => c.type !== 'mul' || c.distractorScale === 1)).toBe(true)
+  })
   it('only includes mul challenges when only mul is active', () => {
     const config = {
       ...DEFAULT_CONFIG,
@@ -177,5 +182,74 @@ describe('buildClassifyChallenge', () => {
     }
     const pool = buildChallengePool(config)
     expect(pool.some((c) => c.type === 'classify')).toBe(false)
+  })
+})
+
+// ── scaleChallenge ────────────────────────────────────────────────────────────
+
+describe('scaleChallenge', () => {
+  const config = { ...DEFAULT_CONFIG, shooter: { ...DEFAULT_CONFIG.shooter, challenges: ['mul' as const, 'div' as const] } }
+  const pool = buildChallengePool(config)
+  const mulBase = pool.find((c): c is MulChallenge => c.type === 'mul')!
+  const divBase = pool.find((c): c is DivChallenge => c.type === 'div')!
+
+  it('returns challenge unchanged when maxZeros=0', () => {
+    expect(scaleChallenge(mulBase, 0)).toBe(mulBase)
+  })
+
+  it('may return challenge unchanged when zeros rolls 0', () => {
+    // Inject RNG that always picks 0 → zeros=0
+    const result = scaleChallenge(mulBase, 3, () => 0)
+    expect(result).toBe(mulBase)
+  })
+
+  it('mul: scales answer and distractorScale by chosen zeros', () => {
+    // RNG: first call (zeros) → 1/4 * 4 = 1 zero; second call (factor) → 0 (applyToA)
+    const result = scaleChallenge(mulBase, 3, (() => {
+      let n = 0
+      return () => [0.26, 0][n++]  // zeros=floor(0.26*4)=1; applyToA=true
+    })()) as MulChallenge
+    const { a, product } = mulBase.triple
+    expect(result.answer).toBe(product * 10)
+    expect(result.distractorScale).toBe(10)
+    expect(result.prompt).toContain(`${a * 10}`)
+  })
+
+  it('div: divisor scaled → answer stays unscaled, distractorScale=1', () => {
+    // Find a div challenge where answer===b (divisor is a)
+    const ch = pool.find((c): c is DivChallenge => c.type === 'div' && c.answer === c.triple.b)!
+    // zeros=1, applyToA=true (divisor is a → divisor scales, answer=b stays)
+    const result = scaleChallenge(ch, 1, (() => {
+      let n = 0
+      return () => [0.9, 0][n++]  // zeros=floor(0.9*2)=1; applyToA=true
+    })()) as DivChallenge
+    expect(result.answer).toBe(ch.triple.b)
+    expect(result.distractorScale).toBe(1)
+    expect(result.prompt).toContain(`${ch.triple.a * 10}`)
+  })
+
+  it('div: answer scaled → distractorScale matches scale', () => {
+    // Find a div challenge where answer===b (divisor is a), force applyToB
+    const ch = pool.find((c): c is DivChallenge => c.type === 'div' && c.answer === c.triple.b)!
+    // zeros=1, applyToA=false (answer is b → answer scales)
+    const result = scaleChallenge(ch, 1, (() => {
+      let n = 0
+      return () => [0.9, 0.9][n++]  // zeros=1; applyToA=false
+    })()) as DivChallenge
+    expect(result.answer).toBe(ch.triple.b * 10)
+    expect(result.distractorScale).toBe(10)
+  })
+
+  it('classify: scales all products', () => {
+    const classifyPool = buildChallengePool({
+      ...DEFAULT_CONFIG,
+      shooter: { ...DEFAULT_CONFIG.shooter, challenges: ['classify' as const] },
+    })
+    const base = classifyPool[0]
+    // zeros=1 (RNG returns 0.6 → floor(0.6*2)=1)
+    const result = scaleChallenge(base, 1, () => 0.6)
+    if (result.type !== 'classify' || base.type !== 'classify') return
+    expect(result.correctAnswers).toEqual(base.correctAnswers.map((p) => p * 10))
+    expect(result.distractors).toEqual(base.distractors.map((p) => p * 10))
   })
 })

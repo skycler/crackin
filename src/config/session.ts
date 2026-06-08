@@ -52,7 +52,7 @@ export const DEFAULT_CONFIG: Readonly<SessionConfig> = Object.freeze({
   shooter: {
     challenges: ['mul', 'div'] as ShooterChallengeType[],
     distractorCount: 4,
-    tileSpeed: 200,
+    tileSpeed: 100,
   },
   sessionLength: 20,
   decimalZeros: 0,
