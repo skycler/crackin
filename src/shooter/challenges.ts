@@ -26,12 +26,23 @@ export interface DivChallenge {
   answer: number
 }
 
-export type ShooterChallenge = MulChallenge | DivChallenge
+export interface ClassifyChallenge {
+  type: 'classify'
+  /** The drawer number being classified, e.g. 7 */
+  drawer: number
+  /** The text shown to the player, e.g. "Drawer 7" */
+  prompt: string
+  /** Products that belong to this drawer (correct tiles) */
+  correctAnswers: number[]
+  /** Products that do NOT belong to this drawer (distractor tiles) */
+  distractors: number[]
+}
+
+export type ShooterChallenge = MulChallenge | DivChallenge | ClassifyChallenge
 
 /**
- * Returns all possible Multiplication/Division challenges for the
- * active drawers in the session config, filtered to the requested
- * challenge types.
+ * Returns all possible Multiplication/Division/Classify challenges for the
+ * active drawers in the session config, filtered to the requested types.
  */
 export function buildChallengePool(
   config: Pick<SessionConfig, 'drawers' | 'shooter'>,
@@ -78,7 +89,58 @@ export function buildChallengePool(
     }
   }
 
+  // Classify challenges — one per active drawer
+  if (activeTypes.has('classify')) {
+    for (const drawer of drawers) {
+      const classify = buildClassifyChallenge(drawer, drawers)
+      if (classify) challenges.push(classify)
+    }
+  }
+
   return challenges
+}
+
+/**
+ * Builds one Classify challenge for a given drawer.
+ * Returns null if there are not enough products to form a meaningful round.
+ */
+export function buildClassifyChallenge(
+  drawer: number,
+  activeDrawers: ReadonlySet<number>,
+): ClassifyChallenge | null {
+  const allTriples = getTriples().filter((t) => t.a >= 2 && t.b >= 2)
+
+  // Correct: products that belong to `drawer`
+  const correctAnswers = [
+    ...new Set(
+      allTriples
+        .filter((t) => t.a === drawer || t.b === drawer)
+        .map((t) => t.product),
+    ),
+  ]
+
+  if (correctAnswers.length === 0) return null
+
+  // Distractors: products from other active drawers that do NOT belong to drawer
+  const distractorSet = new Set<number>()
+  for (const t of allTriples) {
+    if (
+      (activeDrawers.has(t.a) || activeDrawers.has(t.b)) &&
+      t.a !== drawer &&
+      t.b !== drawer
+    ) {
+      distractorSet.add(t.product)
+    }
+  }
+  const distractors = [...distractorSet]
+
+  return {
+    type: 'classify',
+    drawer,
+    prompt: `Drawer ${drawer}`,
+    correctAnswers,
+    distractors,
+  }
 }
 
 /**

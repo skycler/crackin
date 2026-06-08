@@ -4,6 +4,7 @@ import {
   buildChallengePool,
   pickChallenge,
   type ShooterChallenge,
+  type ClassifyChallenge,
 } from './challenges'
 import { generateDistractors } from './distractors'
 import {
@@ -132,18 +133,61 @@ export class ShooterScene extends Phaser.Scene {
     this.promptText.setText(this.current.prompt)
     this.roundStartMs = Date.now()
 
-    const distractorValues = generateDistractors(
-      this.current.answer,
+    if (this.current.type === 'classify') {
+      this.startClassifyRound(this.current)
+    } else {
+      const answer = this.current.answer
+      const distractorValues = generateDistractors(
+        answer,
+        this.config.shooter.distractorCount,
+      )
+      const allValues = Phaser.Utils.Array.Shuffle([
+        answer,
+        ...distractorValues,
+      ]) as number[]
+
+      allValues.forEach((value, idx) => {
+        this.time.delayedCall(idx * 300, () => {
+          this.spawnTile(value, value === answer)
+        })
+      })
+    }
+  }
+
+  /**
+   * Classify round: show all correct tiles plus a subset of distractors.
+   * The round ends when all correct tiles are shot or all correct tiles escape.
+   */
+  private classifyCorrectTotal = 0
+  private classifyCorrectShot = 0
+
+  private startClassifyRound(challenge: ClassifyChallenge): void {
+    this.classifyCorrectTotal = Math.min(challenge.correctAnswers.length, 4)
+    this.classifyCorrectShot = 0
+
+    // Pick a subset of correct answers and distractors
+    const corrects = Phaser.Utils.Array.Shuffle([...challenge.correctAnswers]).slice(
+      0,
+      this.classifyCorrectTotal,
+    ) as number[]
+
+    const distractorCount = Math.min(
+      challenge.distractors.length,
       this.config.shooter.distractorCount,
     )
-    const allValues = Phaser.Utils.Array.Shuffle([
-      this.current.answer,
-      ...distractorValues,
-    ]) as number[]
+    const distractors = Phaser.Utils.Array.Shuffle([...challenge.distractors]).slice(
+      0,
+      distractorCount,
+    ) as number[]
 
-    allValues.forEach((value, idx) => {
-      this.time.delayedCall(idx * 300, () => {
-        this.spawnTile(value, value === this.current.answer)
+    const allValues = Phaser.Utils.Array.Shuffle([
+      ...corrects.map((v) => ({ v, correct: true })),
+      ...distractors.map((v) => ({ v, correct: false })),
+    ]) as { v: number; correct: boolean }[]
+
+    allValues.forEach(({ v, correct }, idx) => {
+      this.time.delayedCall(idx * 280, () => {
+        this.spawnTile(v, correct)
       })
     })
   }
@@ -246,7 +290,17 @@ export class ShooterScene extends Phaser.Scene {
 
     this.flashText(tile.container.x, tile.container.y, '✓', '#00ff88')
     this.destroyTile(tile)
-    this.time.delayedCall(400, () => this.nextRound())
+
+    // Classify rounds end when all correct tiles are shot
+    if (this.current.type === 'classify') {
+      this.classifyCorrectShot++
+      if (this.classifyCorrectShot >= this.classifyCorrectTotal) {
+        this.time.delayedCall(400, () => this.nextRound())
+      }
+      // else: keep going — more correct tiles to hit
+    } else {
+      this.time.delayedCall(400, () => this.nextRound())
+    }
   }
 
   private handleIncorrect(tile: TileData): void {
@@ -254,6 +308,7 @@ export class ShooterScene extends Phaser.Scene {
     this.updateStreakHud()
     this.flashText(tile.container.x, tile.container.y, '✗', '#ff4444')
     this.destroyTile(tile)
+    // In classify mode, shooting a distractor is an error but the round continues
   }
 
   private onEscape(): void {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildChallengePool, pickChallenge, basicDistractors } from './challenges'
+import { buildChallengePool, pickChallenge, basicDistractors, buildClassifyChallenge } from './challenges'
 import { DEFAULT_CONFIG } from '../config/session'
 
 describe('buildChallengePool', () => {
@@ -106,5 +106,70 @@ describe('basicDistractors', () => {
   it('returns unique values', () => {
     const result = basicDistractors(42, 4)
     expect(new Set(result).size).toBe(result.length)
+  })
+})
+
+// ── buildClassifyChallenge ────────────────────────────────────────────────────
+
+describe('buildClassifyChallenge', () => {
+  const allDrawers = new Set([2, 3, 4, 5, 6, 7, 8, 9])
+
+  it('returns a classify challenge with type "classify"', () => {
+    const c = buildClassifyChallenge(7, allDrawers)
+    expect(c?.type).toBe('classify')
+  })
+
+  it('sets the drawer number correctly', () => {
+    const c = buildClassifyChallenge(7, allDrawers)
+    expect(c?.drawer).toBe(7)
+  })
+
+  it('prompt contains the drawer number', () => {
+    const c = buildClassifyChallenge(7, allDrawers)
+    expect(c?.prompt).toContain('7')
+  })
+
+  it('correctAnswers all belong to drawer 7', () => {
+    const c = buildClassifyChallenge(7, allDrawers)!
+    for (const p of c.correctAnswers) {
+      expect(p % 7).toBe(0)
+    }
+  })
+
+  it('distractors do not include products belonging to drawer 7', () => {
+    const c = buildClassifyChallenge(7, allDrawers)!
+    for (const d of c.distractors) {
+      // A distractor for drawer 7 should not be divisible by 7
+      // (or the other factor would be > 10)
+      const other = d / 7
+      expect(Number.isInteger(other) && other <= 10).toBe(false)
+    }
+  })
+
+  it('no overlap between correctAnswers and distractors', () => {
+    const c = buildClassifyChallenge(7, allDrawers)!
+    const correctSet = new Set(c.correctAnswers)
+    for (const d of c.distractors) {
+      expect(correctSet.has(d)).toBe(false)
+    }
+  })
+
+  it('buildChallengePool includes classify challenges when active', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      shooter: { ...DEFAULT_CONFIG.shooter, challenges: ['classify' as const] },
+    }
+    const pool = buildChallengePool(config)
+    expect(pool.every((c) => c.type === 'classify')).toBe(true)
+    expect(pool.length).toBeGreaterThan(0)
+  })
+
+  it('buildChallengePool excludes classify challenges when not active', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      shooter: { ...DEFAULT_CONFIG.shooter, challenges: ['mul' as const] },
+    }
+    const pool = buildChallengePool(config)
+    expect(pool.some((c) => c.type === 'classify')).toBe(false)
   })
 })
