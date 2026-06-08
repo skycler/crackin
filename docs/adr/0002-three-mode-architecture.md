@@ -1,0 +1,3 @@
+# Three distinct game modes instead of one unified mechanic
+
+Multiplication, Division, and Classify challenges map cleanly onto a shooter mechanic (one correct target among distractors, time pressure). Group and Relate challenges do not — Group requires simultaneous comparison of a set, Relate requires constructing a multi-step path. Forcing all five challenge types into the shooter would distort both the mechanic and the math. Each mode gets the interaction model that fits its cognitive task: Shooter for rapid single-answer recall, Group mini-game for set labelling with live coverage feedback, Relate mini-game for step-by-step path construction. All three modes share the same session config, scoring system, and shareable URL format.

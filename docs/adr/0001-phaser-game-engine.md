@@ -1,0 +1,3 @@
+# Use Phaser.js as the game engine
+
+The Shooter mode requires a real-time game loop, sprite animation, pooled moving targets, input handling across touch and keyboard, and audio triggers. Vanilla Canvas would require hand-rolling all of this. Phaser.js provides scene management, sprite pooling, tweens, and audio out of the box, and deploys as a static bundle to GitHub Pages with no server dependency. p5.js and similar creative-coding libraries were considered but strain at shooter-level interaction complexity. The build weight (~1MB) is acceptable given the target use case (home/school LAN or direct link share, not bandwidth-constrained).
