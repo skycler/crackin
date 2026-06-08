@@ -3,9 +3,9 @@ import { decodeConfig, type SessionConfig } from '../config/session'
 import {
   buildChallengePool,
   pickChallenge,
-  basicDistractors,
   type ShooterChallenge,
 } from './challenges'
+import { generateDistractors } from './distractors'
 import {
   initialScoreState,
   onCorrect as scoreOnCorrect,
@@ -132,7 +132,7 @@ export class ShooterScene extends Phaser.Scene {
     this.promptText.setText(this.current.prompt)
     this.roundStartMs = Date.now()
 
-    const distractorValues = basicDistractors(
+    const distractorValues = generateDistractors(
       this.current.answer,
       this.config.shooter.distractorCount,
     )
