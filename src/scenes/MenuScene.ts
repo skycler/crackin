@@ -45,7 +45,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { width, height } = this.scale
+    const { width } = this.scale
 
     // Title
     this.add

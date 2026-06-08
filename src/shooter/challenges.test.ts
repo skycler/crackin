@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildChallengePool, pickChallenge, basicDistractors, buildClassifyChallenge } from './challenges'
+import type { MulChallenge, DivChallenge } from './challenges'
 import { DEFAULT_CONFIG } from '../config/session'
 
 describe('buildChallengePool', () => {
@@ -50,12 +51,15 @@ describe('buildChallengePool', () => {
       shooter: { ...DEFAULT_CONFIG.shooter, challenges: ['mul' as const] },
     }
     for (const c of buildChallengePool(config)) {
+      if (c.type !== 'mul') continue
       expect(c.answer).toBe(c.triple.a * c.triple.b)
     }
   })
 
   it('excludes trivial ×1 triples', () => {
-    const pool = buildChallengePool(DEFAULT_CONFIG)
+    const pool = buildChallengePool(DEFAULT_CONFIG).filter(
+      (c): c is MulChallenge | DivChallenge => c.type === 'mul' || c.type === 'div',
+    )
     expect(pool.every((c) => c.triple.a > 1 && c.triple.b > 1)).toBe(true)
   })
 
@@ -67,7 +71,9 @@ describe('buildChallengePool', () => {
     }
     const pool = buildChallengePool(config)
     // Every triple must have 7 as a or b
-    expect(pool.every((c) => c.triple.a === 7 || c.triple.b === 7)).toBe(true)
+    expect(
+      pool.every((c) => c.type !== 'classify' && (c.triple.a === 7 || c.triple.b === 7)),
+    ).toBe(true)
   })
 })
 
