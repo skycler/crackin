@@ -1,7 +1,13 @@
 /**
  * Session scoring and streak system.
  *
- * Score per correct answer: floor(1000 / response_ms) × streak_multiplier
+ * Score per correct answer: round((10 + speedBonus) × streak_multiplier)
+ *   speedBonus = 10 × 0.5^(ms / 3000)  — halves every 3 seconds, ranges 10 → 0
+ *
+ * This guarantees a minimum of 10 points per correct answer (base), with up to
+ * 10 bonus points for speed (20 total at instant response). The speed bonus
+ * halves every 3 seconds, reaching ~5 at 3 s and ~0 at very long times.
+ *
  * Streak multiplier increases at configurable milestones.
  * Score is not persisted between sessions.
  */
@@ -42,6 +48,9 @@ export function initialScoreState(): ScoreState {
 /**
  * Returns a new ScoreState after a correct answer.
  *
+ * Score = round((10 + speedBonus) × multiplier)
+ * speedBonus = 10 × 0.5^(ms / 3000)  — halves every 3 s, ranges 10 → 0
+ *
  * @param state   Current score state
  * @param ms      Response time in milliseconds
  * @param milestones  Streak milestone config (default: DEFAULT_MILESTONES)
@@ -53,7 +62,8 @@ export function onCorrect(
 ): ScoreState {
   const streak = state.streak + 1
   const multiplier = resolveMultiplier(streak, milestones)
-  const points = Math.floor(1000 / Math.max(ms, 1)) * multiplier
+  const speedBonus = 10 * Math.pow(0.5, ms / 3000)
+  const points = Math.round((10 + speedBonus) * multiplier)
   return {
     total: state.total + points,
     streak,

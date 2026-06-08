@@ -28,20 +28,33 @@ describe('onCorrect', () => {
     expect(s.streak).toBe(1)
   })
 
-  it('adds floor(1000/ms) × multiplier to total', () => {
-    const s = onCorrect(initialScoreState(), 500)
-    // floor(1000/500) × 1 = 2
-    expect(s.total).toBe(2)
+  it('instant answer (ms=0) scores 20 points at ×1 multiplier', () => {
+    // speedBonus = 10 × 0.5^0 = 10; total = round((10+10) × 1) = 20
+    const s = onCorrect(initialScoreState(), 0)
+    expect(s.total).toBe(20)
+  })
+
+  it('answer at 3000ms scores 15 points at ×1 multiplier', () => {
+    // speedBonus = 10 × 0.5^1 = 5; total = round((10+5) × 1) = 15
+    const s = onCorrect(initialScoreState(), 3000)
+    expect(s.total).toBe(15)
+  })
+
+  it('very slow answer scores close to base 10 points', () => {
+    // speedBonus → 0 as ms → ∞
+    const s = onCorrect(initialScoreState(), 1_000_000)
+    expect(s.total).toBe(10)
   })
 
   it('uses streak multiplier for scoring', () => {
+    // Using ms=0 for exact values: each answer scores 20 × multiplier
     let s = initialScoreState()
-    s = onCorrect(s, 1000) // streak 1, ×1 → +1
-    s = onCorrect(s, 1000) // streak 2, ×1 → +1
-    s = onCorrect(s, 1000) // streak 3, ×2 → +2
+    s = onCorrect(s, 0) // streak 1, ×1 → +20, total=20
+    s = onCorrect(s, 0) // streak 2, ×1 → +20, total=40
+    s = onCorrect(s, 0) // streak 3, ×2 → +40, total=80
     expect(s.streak).toBe(3)
     expect(s.multiplier).toBe(2)
-    expect(s.total).toBe(4)
+    expect(s.total).toBe(80)
   })
 
   it('reaches ×3 at 5-in-a-row', () => {
@@ -53,13 +66,15 @@ describe('onCorrect', () => {
     expect(s.streak).toBe(5)
   })
 
-  it('does not add negative total for very fast answers', () => {
-    const s = onCorrect(initialScoreState(), 1)
-    expect(s.total).toBeGreaterThan(0)
+  it('faster answers score more than slower answers', () => {
+    const fast = onCorrect(initialScoreState(), 100)
+    const slow = onCorrect(initialScoreState(), 5000)
+    expect(fast.total).toBeGreaterThan(slow.total)
   })
 
-  it('handles ms = 0 without throwing (guarded to 1ms)', () => {
-    expect(() => onCorrect(initialScoreState(), 0)).not.toThrow()
+  it('score is always positive regardless of response time', () => {
+    expect(onCorrect(initialScoreState(), 0).total).toBeGreaterThan(0)
+    expect(onCorrect(initialScoreState(), 60_000).total).toBeGreaterThan(0)
   })
 
   it('does not change errors count', () => {
