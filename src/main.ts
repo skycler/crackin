@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene'
 import { SettingsScene } from './scenes/SettingsScene'
 import { ShooterScene } from './shooter/ShooterScene'
 import { GroupScene } from './group/GroupScene'
+import { RelateScene } from './relate/RelateScene'
 import { SessionEndScene } from './scenes/SessionEndScene'
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -15,7 +16,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 960,
     height: 540,
   },
-  scene: [BootScene, SettingsScene, ShooterScene, GroupScene, SessionEndScene],
+  scene: [BootScene, SettingsScene, ShooterScene, GroupScene, RelateScene, SessionEndScene],
   input: {
     activePointers: 3,
   },
