@@ -66,6 +66,6 @@ export class BootScene extends Phaser.Scene {
     this.inputIndicator.setColor('#00ff88')
     this.inputIndicator.setAlpha(1)
     this.tweens.killTweensOf(this.inputIndicator)
-    this.time.delayedCall(200, () => this.scene.start('ShooterScene'))
+    this.time.delayedCall(200, () => this.scene.start('SettingsScene'))
   }
 }

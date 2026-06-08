@@ -2,8 +2,7 @@ import Phaser from 'phaser'
 
 /**
  * SessionEndScene — shown after a session completes.
- * Displays final score and buttons to play again or return to menu.
- * Navigation events are delegated to the game in later issues.
+ * Displays final score and buttons to play again or return to settings.
  */
 export class SessionEndScene extends Phaser.Scene {
   constructor() {
@@ -59,9 +58,9 @@ export class SessionEndScene extends Phaser.Scene {
       this.scene.start('ShooterScene')
     })
 
-    // Menu
+    // Menu / settings
     const menu = this.add
-      .text(width / 2 + 120, height / 2 + 140, '[menu]', {
+      .text(width / 2 + 120, height / 2 + 140, '[settings]', {
         fontSize: '26px',
         fontFamily: 'monospace',
         color: '#888888',
@@ -70,15 +69,15 @@ export class SessionEndScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
 
     menu.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
-      this.scene.start('MenuScene')
+      this.scene.start('SettingsScene')
     })
 
-    // Keyboard: R = play again, M = menu, Enter = play again
+    // Keyboard: R/Enter = play again, M/S = settings
     this.input.keyboard?.on(
       Phaser.Input.Keyboard.Events.ANY_KEY_DOWN,
       (e: KeyboardEvent) => {
         if (e.code === 'KeyR' || e.code === 'Enter') this.scene.start('ShooterScene')
-        if (e.code === 'KeyM') this.scene.start('MenuScene')
+        if (e.code === 'KeyM' || e.code === 'KeyS') this.scene.start('SettingsScene')
       },
     )
   }
