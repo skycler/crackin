@@ -117,6 +117,7 @@ describe('round-trip: decodeConfig(encodeConfig(config)) equals config', () => {
     expect(decoded.shooter.distractorCount).toBe(DEFAULT_CONFIG.shooter.distractorCount)
     expect(decoded.shooter.tileSpeed).toBe(DEFAULT_CONFIG.shooter.tileSpeed)
     expect(decoded.sessionLength).toBe(DEFAULT_CONFIG.sessionLength)
+    expect(decoded.decimalZeros).toBe(DEFAULT_CONFIG.decimalZeros)
   })
 
   it('round-trips a custom config', () => {
@@ -129,6 +130,7 @@ describe('round-trip: decodeConfig(encodeConfig(config)) equals config', () => {
         tileSpeed: 300,
       },
       sessionLength: 10,
+      decimalZeros: 2,
     }
     const encoded = encodeConfig(custom)
     const decoded = decodeConfig(encoded)
@@ -138,5 +140,6 @@ describe('round-trip: decodeConfig(encodeConfig(config)) equals config', () => {
     expect(decoded.shooter.distractorCount).toBe(6)
     expect(decoded.shooter.tileSpeed).toBe(300)
     expect(decoded.sessionLength).toBe(10)
+    expect(decoded.decimalZeros).toBe(2)
   })
 })

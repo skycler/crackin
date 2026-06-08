@@ -11,14 +11,16 @@ import {
   initialScoreState,
   onCorrect as scoreOnCorrect,
   onError as scoreOnError,
-  nextMilestone,
-  DEFAULT_MILESTONES,
   type ScoreState,
 } from '../scoring/score'
 
 // ── Tile colours (geometric palette) ─────────────────────────────────────────
 
 const TILE_COLOURS = [0x3a86ff, 0xff6b6b, 0xffd166, 0x06d6a0, 0xbf5af2, 0xfe7f2d]
+
+// ── Tile radius (px) ──────────────────────────────────────────────────────────
+
+const RADIUS = 44
 
 // ── Tile data ─────────────────────────────────────────────────────────────────
 
@@ -27,6 +29,9 @@ interface TileData {
   isCorrect: boolean
   container: Phaser.GameObjects.Container
   spawnedAt: number
+  /** Velocity in px/s (set by spawnTile, updated by update()). */
+  vx: number
+  vy: number
 }
 
 // ── ShooterScene ──────────────────────────────────────────────────────────────
@@ -73,16 +78,16 @@ export class ShooterScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0)
 
-    // HUD — score
+    // HUD — score (top-right)
     this.scoreText = this.add
       .text(width - 16, 16, 'score: 0', {
         fontSize: '22px',
         fontFamily: 'monospace',
-        color: '#888888',
+        color: '#ffffff',
       })
       .setOrigin(1, 0)
 
-    // HUD — streak
+    // HUD — streak (top-left)
     this.streakText = this.add
       .text(16, 16, '', {
         fontSize: '22px',
@@ -107,14 +112,36 @@ export class ShooterScene extends Phaser.Scene {
     this.nextRound()
   }
 
-  update(): void {
-    const { width } = this.scale
-    for (let i = this.tiles.length - 1; i >= 0; i--) {
-      const tile = this.tiles[i]
-      if (tile.container.x > width + 80) {
-        if (tile.isCorrect) this.onEscape()
-        tile.container.destroy()
-        this.tiles.splice(i, 1)
+  /**
+   * Per-frame bouncing physics.
+   * Each tile moves by (vx, vy) × dt and reflects off the four walls.
+   * Tiles never escape — there is no time limit per round.
+   */
+  update(_time: number, delta: number): void {
+    const { width, height } = this.scale
+    const dt = delta / 1000
+
+    for (const tile of this.tiles) {
+      tile.container.x += tile.vx * dt
+      tile.container.y += tile.vy * dt
+
+      // Reflect off left / right walls
+      if (tile.container.x < RADIUS) {
+        tile.container.x = RADIUS
+        tile.vx = Math.abs(tile.vx)
+      } else if (tile.container.x > width - RADIUS) {
+        tile.container.x = width - RADIUS
+        tile.vx = -Math.abs(tile.vx)
+      }
+
+      // Reflect off top (below HUD) / bottom walls
+      const topWall = 100 + RADIUS
+      if (tile.container.y < topWall) {
+        tile.container.y = topWall
+        tile.vy = Math.abs(tile.vy)
+      } else if (tile.container.y > height - RADIUS) {
+        tile.container.y = height - RADIUS
+        tile.vy = -Math.abs(tile.vy)
       }
     }
   }
@@ -129,7 +156,8 @@ export class ShooterScene extends Phaser.Scene {
     this.round++
     this.clearTiles()
 
-    this.current = pickChallenge(this.pool)
+    // Fair type selection: each active challenge type appears with equal frequency.
+    this.current = pickChallenge(this.pool, this.config.shooter.challenges)
     this.promptText.setText(this.current.prompt)
     this.roundStartMs = Date.now()
 
@@ -137,9 +165,12 @@ export class ShooterScene extends Phaser.Scene {
       this.startClassifyRound(this.current)
     } else {
       const answer = this.current.answer
+      const scale = this.current.distractorScale
       const distractorValues = generateDistractors(
         answer,
         this.config.shooter.distractorCount,
+        undefined,
+        scale,
       )
       const allValues = Phaser.Utils.Array.Shuffle([
         answer,
@@ -156,7 +187,7 @@ export class ShooterScene extends Phaser.Scene {
 
   /**
    * Classify round: show all correct tiles plus a subset of distractors.
-   * The round ends when all correct tiles are shot or all correct tiles escape.
+   * The round ends when all correct tiles are shot.
    */
   private classifyCorrectTotal = 0
   private classifyCorrectShot = 0
@@ -165,7 +196,6 @@ export class ShooterScene extends Phaser.Scene {
     this.classifyCorrectTotal = Math.min(challenge.correctAnswers.length, 4)
     this.classifyCorrectShot = 0
 
-    // Pick a subset of correct answers and distractors
     const corrects = Phaser.Utils.Array.Shuffle([...challenge.correctAnswers]).slice(
       0,
       this.classifyCorrectTotal,
@@ -195,16 +225,18 @@ export class ShooterScene extends Phaser.Scene {
   // ── Tile spawning ────────────────────────────────────────────────────────────
 
   private spawnTile(value: number, isCorrect: boolean): void {
-    const { height } = this.scale
+    const { width, height } = this.scale
     const colour = TILE_COLOURS[Math.floor(Math.random() * TILE_COLOURS.length)]
-    const y = Phaser.Math.Between(100, height - 60)
+
+    // Random position within the play area (below HUD, clear of walls)
+    const x = Phaser.Math.Between(RADIUS, width - RADIUS)
+    const y = Phaser.Math.Between(100 + RADIUS, height - RADIUS)
 
     const gfx = this.add.graphics()
-    const r = 44
     gfx.fillStyle(colour, 1)
-    gfx.fillCircle(0, 0, r)
+    gfx.fillCircle(0, 0, RADIUS)
     gfx.lineStyle(3, 0xffffff, 0.25)
-    gfx.strokeCircle(0, 0, r)
+    gfx.strokeCircle(0, 0, RADIUS)
 
     const label = this.add
       .text(0, 0, String(value), {
@@ -215,24 +247,24 @@ export class ShooterScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    const container = this.add.container(-80, y, [gfx, label])
-    container.setSize(r * 2, r * 2)
+    const container = this.add.container(x, y, [gfx, label])
+    container.setSize(RADIUS * 2, RADIUS * 2)
     container.setInteractive()
 
-    const tileData: TileData = { value, isCorrect, container, spawnedAt: Date.now() }
+    // Random direction, speed controlled by config
+    const angle = Math.random() * Math.PI * 2
+    const speed = this.config.shooter.tileSpeed
+    const tileData: TileData = {
+      value,
+      isCorrect,
+      container,
+      spawnedAt: Date.now(),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+    }
 
     container.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
       this.handleTileHit(tileData)
-    })
-
-    const speed = this.config.shooter.tileSpeed
-    const duration = ((this.scale.width + 160) / speed) * 1000
-
-    this.tweens.add({
-      targets: container,
-      x: this.scale.width + 80,
-      duration,
-      ease: 'Linear',
     })
 
     this.tiles.push(tileData)
@@ -259,7 +291,11 @@ export class ShooterScene extends Phaser.Scene {
 
   private fireAtNearest(): void {
     if (this.tiles.length === 0) return
-    const nearest = this.tiles.reduce((a, b) => (a.container.x > b.container.x ? a : b))
+    // Fire at the tile nearest to the horizontal centre of the screen
+    const cx = this.scale.width / 2
+    const nearest = this.tiles.reduce((a, b) =>
+      Math.abs(a.container.x - cx) < Math.abs(b.container.x - cx) ? a : b,
+    )
     this.handleTileHit(nearest)
   }
 
@@ -297,24 +333,20 @@ export class ShooterScene extends Phaser.Scene {
       if (this.classifyCorrectShot >= this.classifyCorrectTotal) {
         this.time.delayedCall(400, () => this.nextRound())
       }
-      // else: keep going — more correct tiles to hit
     } else {
       this.time.delayedCall(400, () => this.nextRound())
     }
   }
 
+  /**
+   * Wrong tile hit: remove the tile and register an error, but keep the round
+   * alive so the player can try again with the remaining tiles.
+   */
   private handleIncorrect(tile: TileData): void {
     this.scoreState = scoreOnError(this.scoreState)
     this.updateStreakHud()
     this.flashText(tile.container.x, tile.container.y, '✗', '#ff4444')
     this.destroyTile(tile)
-    // In classify mode, shooting a distractor is an error but the round continues
-  }
-
-  private onEscape(): void {
-    this.scoreState = scoreOnError(this.scoreState)
-    this.updateStreakHud()
-    this.time.delayedCall(200, () => this.nextRound())
   }
 
   // ── HUD helpers ──────────────────────────────────────────────────────────────
@@ -325,9 +357,7 @@ export class ShooterScene extends Phaser.Scene {
       this.streakText.setText('')
       return
     }
-    const next = nextMilestone(streak, DEFAULT_MILESTONES)
-    const until = next ? ` → ×${next.multiplier} in ${next.at - streak}` : ' (max)'
-    this.streakText.setText(`streak: ${streak}  ×${multiplier}${until}`)
+    this.streakText.setText(`streak: ${streak} (x${multiplier})`)
   }
 
   private celebrateMilestone(multiplier: number): void {
@@ -359,6 +389,9 @@ export class ShooterScene extends Phaser.Scene {
   private destroyTile(tile: TileData): void {
     const idx = this.tiles.indexOf(tile)
     if (idx !== -1) this.tiles.splice(idx, 1)
+    // Stop movement by zeroing velocity so the pop animation plays in place
+    tile.vx = 0
+    tile.vy = 0
     this.tweens.add({
       targets: tile.container,
       scaleX: 0,

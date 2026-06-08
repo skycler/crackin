@@ -90,8 +90,8 @@ describe('pickChallenge', () => {
 
   it('uses the provided random function', () => {
     const pool = buildChallengePool(DEFAULT_CONFIG)
-    // Always pick last element
-    const last = pickChallenge(pool, () => 0.9999)
+    // Always pick last element — pass undefined for activeTypes to use flat sampling
+    const last = pickChallenge(pool, undefined, () => 0.9999)
     expect(last).toBe(pool[pool.length - 1])
   })
 })

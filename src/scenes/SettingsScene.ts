@@ -86,7 +86,7 @@ export class SettingsScene extends Phaser.Scene {
     this.add.text(24, y, 'difficulty', { ...FONT, fontSize: '18px', color: COLORS.dim })
     y += 28
     this.buildDifficultyControls(y)
-    y += 70
+    y += 110
 
     // ── Shareable URL ────────────────────────────────────────────────────────
     this.add.text(24, y, 'shareable link', {
@@ -236,6 +236,19 @@ export class SettingsScene extends Phaser.Scene {
     this.makeSpinner(730, y, -5, 5, 5, 50, () => this.config.sessionLength, (v) => {
       this.config.sessionLength = v
       slVal.setText(String(v))
+      this.refreshUrl()
+    })
+
+    // Decimal zeros (second row)
+    const y2 = y + 36
+    this.add.text(24, y2, 'decimal zeros', { ...FONT, fontSize: '16px', color: COLORS.dim })
+    const dzVal = this.add.text(192, y2, String(this.config.decimalZeros), {
+      ...FONT,
+      fontSize: '16px',
+    })
+    this.makeSpinner(228, y2, -1, 1, 0, 3, () => this.config.decimalZeros, (v) => {
+      this.config.decimalZeros = v
+      dzVal.setText(String(v))
       this.refreshUrl()
     })
   }

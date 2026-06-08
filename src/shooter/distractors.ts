@@ -21,25 +21,29 @@ const ALL_PRODUCTS: ReadonlySet<number> = new Set(getTriples().map((t) => t.prod
  * Does not require the full triple — only the answer is needed to build
  * the pools.
  *
- * @param answer  The correct answer (product for mul, factor for div)
+ * @param answer  The correct answer
  * @param count   How many distractors to generate
  * @param random  Injectable RNG for deterministic testing
+ * @param scale   10^decimalZeros — all returned values are multiples of this.
+ *                Pass the same scale used to produce `answer` so distractors
+ *                live in the same number space.
  */
 export function generateDistractors(
   answer: number,
   count: number,
   random: () => number = Math.random,
+  scale = 1,
 ): number[] {
   const excluded = new Set([answer])
 
-  // ── Pool 1: nearby ± 1–2 ─────────────────────────────────────────────────
-  const nearby = buildNearbyPool(answer, excluded)
+  // ── Pool 1: nearby ± 1–2 steps (in scaled space) ─────────────────────────
+  const nearby = buildNearbyPool(answer, excluded, scale)
 
-  // ── Pool 2: same-drawer products ────────────────────────────────────────
-  const sameDrawer = buildSameDrawerPool(answer, excluded)
+  // ── Pool 2: same-drawer products (scaled) ────────────────────────────────
+  const sameDrawer = buildSameDrawerPool(answer, excluded, scale)
 
-  // ── Pool 3: cross-drawer products ───────────────────────────────────────
-  const crossDrawer = buildCrossDrawerPool(answer, excluded)
+  // ── Pool 3: cross-drawer products (scaled) ───────────────────────────────
+  const crossDrawer = buildCrossDrawerPool(answer, excluded, scale)
 
   // ── Fill strategy: guarantee ≥1 from each non-empty pool ────────────────
   const chosen = new Set<number>()
@@ -52,15 +56,14 @@ export function generateDistractors(
     return true
   }
 
-  // One guaranteed from each pool
   pickFrom(nearby)
   pickFrom(sameDrawer)
   pickFrom(crossDrawer)
 
   // Fill remaining from combined fallback
   const fallback = shuffled(
-    [...nearby, ...sameDrawer, ...crossDrawer, ...fallbackPool(answer, excluded)].filter(
-      (n, i, arr) => arr.indexOf(n) === i, // deduplicate
+    [...nearby, ...sameDrawer, ...crossDrawer, ...fallbackPool(answer, excluded, scale)].filter(
+      (n, i, arr) => arr.indexOf(n) === i,
     ),
     random,
   )
@@ -75,28 +78,39 @@ export function generateDistractors(
 
 // ── Pool builders ─────────────────────────────────────────────────────────────
 
-function buildNearbyPool(answer: number, excluded: ReadonlySet<number>): number[] {
+/**
+ * Nearby: answer ± 1 and ± 2 steps in scaled space (i.e. ± scale and ± 2*scale).
+ * For scale=1 this is ±1, ±2 as before.
+ */
+function buildNearbyPool(answer: number, excluded: ReadonlySet<number>, scale = 1): number[] {
   return [-2, -1, 1, 2]
-    .map((delta) => answer + delta)
+    .map((delta) => answer + delta * scale)
     .filter((n) => n > 0 && !excluded.has(n))
 }
 
-function buildSameDrawerPool(answer: number, excluded: ReadonlySet<number>): number[] {
+/**
+ * Same-drawer products, scaled.
+ * getDrawers strips trailing zeros so scaled answers resolve correctly.
+ */
+function buildSameDrawerPool(answer: number, excluded: ReadonlySet<number>, scale = 1): number[] {
   const drawers = getDrawers(answer)
   const products = new Set<number>()
   for (const t of getTriples()) {
     for (const d of drawers) {
-      if ((t.a === d || t.b === d) && !excluded.has(t.product)) {
-        products.add(t.product)
+      const scaled = t.product * scale
+      if ((t.a === d || t.b === d) && !excluded.has(scaled)) {
+        products.add(scaled)
       }
     }
   }
   return [...products]
 }
 
-function buildCrossDrawerPool(answer: number, excluded: ReadonlySet<number>): number[] {
+/**
+ * Cross-drawer products (adjacent drawers ±1), scaled.
+ */
+function buildCrossDrawerPool(answer: number, excluded: ReadonlySet<number>, scale = 1): number[] {
   const ownDrawers = new Set(getDrawers(answer))
-  // Adjacent drawers = ±1 from each own drawer, still within 2–9
   const adjacent = new Set<number>()
   for (const d of ownDrawers) {
     if (d - 1 >= 2) adjacent.add(d - 1)
@@ -105,17 +119,18 @@ function buildCrossDrawerPool(answer: number, excluded: ReadonlySet<number>): nu
   const products = new Set<number>()
   for (const t of getTriples()) {
     for (const d of adjacent) {
-      if ((t.a === d || t.b === d) && !excluded.has(t.product)) {
-        products.add(t.product)
+      const scaled = t.product * scale
+      if ((t.a === d || t.b === d) && !excluded.has(scaled)) {
+        products.add(scaled)
       }
     }
   }
   return [...products]
 }
 
-/** Last-resort pool: any valid product not already excluded. */
-function fallbackPool(answer: number, excluded: ReadonlySet<number>): number[] {
-  return [...ALL_PRODUCTS].filter((n) => !excluded.has(n) && n !== answer)
+/** Last-resort pool: any valid (scaled) product not already excluded. */
+function fallbackPool(answer: number, excluded: ReadonlySet<number>, scale = 1): number[] {
+  return [...ALL_PRODUCTS].map((p) => p * scale).filter((n) => !excluded.has(n) && n !== answer)
 }
 
 function shuffled<T>(arr: T[], random: () => number): T[] {

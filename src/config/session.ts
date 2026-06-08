@@ -36,6 +36,12 @@ export interface SessionConfig {
   shooter: ShooterConfig
   /** Total number of rounds per session (applies to all modes). */
   sessionLength: number
+  /**
+   * Number of trailing zeros to append to all challenge numbers (0–3).
+   * 0 = base space (42); 1 = ×10 (420); 2 = ×100 (4200).
+   * Trains decimal-extension fluency: 6×7=42 ↔ 6×70=420.
+   */
+  decimalZeros: number
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -49,6 +55,7 @@ export const DEFAULT_CONFIG: Readonly<SessionConfig> = Object.freeze({
     tileSpeed: 200,
   },
   sessionLength: 20,
+  decimalZeros: 0,
 })
 
 // ── Encode ────────────────────────────────────────────────────────────────────
@@ -77,6 +84,9 @@ export function encodeConfig(config: SessionConfig): string {
 
   // Session length
   params.set('sl', String(config.sessionLength))
+
+  // Decimal zeros
+  params.set('dz', String(config.decimalZeros))
 
   return params.toString()
 }
@@ -115,11 +125,15 @@ export function decodeConfig(queryString: string): SessionConfig {
   // Session length
   const sessionLength = parsePositiveInt(params.get('sl'), DEFAULT_CONFIG.sessionLength)
 
+  // Decimal zeros (0–3, default 0)
+  const decimalZeros = parseDecimalZeros(params.get('dz'))
+
   return {
     drawers,
     modes,
     shooter: { challenges, distractorCount, tileSpeed },
     sessionLength,
+    decimalZeros,
   }
 }
 
@@ -153,4 +167,10 @@ function parsePositiveInt(raw: string | null, fallback: number): number {
   if (!raw) return fallback
   const n = parseInt(raw, 10)
   return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+function parseDecimalZeros(raw: string | null): number {
+  if (!raw) return DEFAULT_CONFIG.decimalZeros
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) && n >= 0 && n <= 3 ? n : DEFAULT_CONFIG.decimalZeros
 }
