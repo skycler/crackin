@@ -3,9 +3,7 @@ import {
   initialScoreState,
   onCorrect,
   onError,
-  resolveMultiplier,
-  nextMilestone,
-  DEFAULT_MILESTONES,
+  streakMultiplier,
 } from './score'
 
 // ── initialScoreState ─────────────────────────────────────────────────────────
@@ -20,6 +18,30 @@ describe('initialScoreState', () => {
   })
 })
 
+// ── streakMultiplier ──────────────────────────────────────────────────────────
+
+describe('streakMultiplier', () => {
+  it('returns 1.0 at streak 0', () => {
+    expect(streakMultiplier(0)).toBe(1.0)
+  })
+
+  it('returns 1.5 at streak 5', () => {
+    expect(streakMultiplier(5)).toBe(1.5)
+  })
+
+  it('returns 2.0 at streak 10', () => {
+    expect(streakMultiplier(10)).toBe(2.0)
+  })
+
+  it('returns 3.0 at streak 20', () => {
+    expect(streakMultiplier(20)).toBe(3.0)
+  })
+
+  it('increases linearly with streak', () => {
+    expect(streakMultiplier(15)).toBe(2.5)
+  })
+})
+
 // ── onCorrect ─────────────────────────────────────────────────────────────────
 
 describe('onCorrect', () => {
@@ -28,42 +50,32 @@ describe('onCorrect', () => {
     expect(s.streak).toBe(1)
   })
 
-  it('instant answer (ms=0) scores 20 points at ×1 multiplier', () => {
-    // speedBonus = 10 × 0.5^0 = 10; total = round((10+10) × 1) = 20
+  it('instant answer (ms=0) at first correct scores 2 points', () => {
+    // streak→1, mult=1.1, speedBonus=1 → round(2 × 1.1) = 2
     const s = onCorrect(initialScoreState(), 0)
-    expect(s.total).toBe(20)
+    expect(s.total).toBe(2)
   })
 
-  it('answer at 3000ms scores 15 points at ×1 multiplier', () => {
-    // speedBonus = 10 × 0.5^1 = 5; total = round((10+5) × 1) = 15
-    const s = onCorrect(initialScoreState(), 3000)
-    expect(s.total).toBe(15)
-  })
-
-  it('very slow answer scores close to base 10 points', () => {
-    // speedBonus → 0 as ms → ∞
+  it('very slow answer at first correct scores 1 point', () => {
+    // streak→1, mult=1.1, speedBonus≈0 → round(1 × 1.1) = 1
     const s = onCorrect(initialScoreState(), 1_000_000)
-    expect(s.total).toBe(10)
+    expect(s.total).toBe(1)
   })
 
-  it('uses streak multiplier for scoring', () => {
-    // Using ms=0 for exact values: each answer scores 20 × multiplier
-    let s = initialScoreState()
-    s = onCorrect(s, 0) // streak 1, ×1 → +20, total=20
-    s = onCorrect(s, 0) // streak 2, ×1 → +20, total=40
-    s = onCorrect(s, 0) // streak 3, ×2 → +40, total=80
-    expect(s.streak).toBe(3)
-    expect(s.multiplier).toBe(2)
-    expect(s.total).toBe(80)
+  it('instant answer at streak 10 scores 4 points', () => {
+    // streak→10, mult=2.0, speedBonus=1 → round(2 × 2.0) = 4
+    const base = { ...initialScoreState(), streak: 9, multiplier: 1.9 }
+    const s = onCorrect(base, 0)
+    expect(s.streak).toBe(10)
+    expect(s.multiplier).toBe(2.0)
+    expect(s.total).toBe(4)
   })
 
-  it('reaches ×3 at 5-in-a-row', () => {
-    let s = initialScoreState()
-    for (let i = 0; i < 5; i++) {
-      s = onCorrect(s, 1000)
-    }
-    expect(s.multiplier).toBe(3)
-    expect(s.streak).toBe(5)
+  it('answer at 3000ms at streak 10 scores 3 points', () => {
+    // streak→10, mult=2.0, speedBonus=0.5 → round(1.5 × 2.0) = 3
+    const base = { ...initialScoreState(), streak: 9, multiplier: 1.9 }
+    const s = onCorrect(base, 3000)
+    expect(s.total).toBe(3)
   })
 
   it('faster answers score more than slower answers', () => {
@@ -101,7 +113,7 @@ describe('onError', () => {
 
   it('resets multiplier to ×1', () => {
     let s = onCorrect(onCorrect(onCorrect(initialScoreState(), 100), 100), 100)
-    expect(s.multiplier).toBe(2)
+    expect(s.multiplier).toBeGreaterThan(1)
     s = onError(s)
     expect(s.multiplier).toBe(1)
   })
@@ -111,49 +123,5 @@ describe('onError', () => {
     const totalBefore = s.total
     s = onError(s)
     expect(s.total).toBe(totalBefore)
-  })
-})
-
-// ── resolveMultiplier ─────────────────────────────────────────────────────────
-
-describe('resolveMultiplier', () => {
-  it('returns 1 below first milestone', () => {
-    expect(resolveMultiplier(0, DEFAULT_MILESTONES)).toBe(1)
-    expect(resolveMultiplier(2, DEFAULT_MILESTONES)).toBe(1)
-  })
-
-  it('returns ×2 at streak 3', () => {
-    expect(resolveMultiplier(3, DEFAULT_MILESTONES)).toBe(2)
-    expect(resolveMultiplier(4, DEFAULT_MILESTONES)).toBe(2)
-  })
-
-  it('returns ×3 at streak 5', () => {
-    expect(resolveMultiplier(5, DEFAULT_MILESTONES)).toBe(3)
-    expect(resolveMultiplier(10, DEFAULT_MILESTONES)).toBe(3)
-  })
-
-  it('works with custom milestones', () => {
-    const custom = [{ at: 2, multiplier: 5 }]
-    expect(resolveMultiplier(1, custom)).toBe(1)
-    expect(resolveMultiplier(2, custom)).toBe(5)
-  })
-})
-
-// ── nextMilestone ─────────────────────────────────────────────────────────────
-
-describe('nextMilestone', () => {
-  it('returns first milestone when streak is 0', () => {
-    const m = nextMilestone(0, DEFAULT_MILESTONES)
-    expect(m?.at).toBe(3)
-  })
-
-  it('returns second milestone after first is reached', () => {
-    const m = nextMilestone(3, DEFAULT_MILESTONES)
-    expect(m?.at).toBe(5)
-  })
-
-  it('returns null when all milestones are reached', () => {
-    expect(nextMilestone(5, DEFAULT_MILESTONES)).toBeNull()
-    expect(nextMilestone(10, DEFAULT_MILESTONES)).toBeNull()
   })
 })

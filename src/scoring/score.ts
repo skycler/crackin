@@ -1,37 +1,22 @@
 /**
  * Session scoring and streak system.
  *
- * Score per correct answer: round((10 + speedBonus) × streak_multiplier)
- *   speedBonus = 10 × 0.5^(ms / 3000)  — halves every 3 seconds, ranges 10 → 0
+ * Score per correct answer: round((1 + speedBonus) × streakMultiplier(streak))
+ *   speedBonus       = 0.5^(ms / 3000)  — halves every 3 s, ranges 1 → 0
+ *   streakMultiplier = 1 + streak / 10  — continuous: ×1 at 0, ×1.5 at 5, ×2 at 10
  *
- * This guarantees a minimum of 10 points per correct answer (base), with up to
- * 10 bonus points for speed (20 total at instant response). The speed bonus
- * halves every 3 seconds, reaching ~5 at 3 s and ~0 at very long times.
- *
- * Streak multiplier increases at configurable milestones.
+ * Minimum 1 point per correct answer (base, no speed bonus, no streak).
  * Score is not persisted between sessions.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-/** A streak milestone: when streak reaches `at`, apply `multiplier`. */
-export interface StreakMilestone {
-  at: number
-  multiplier: number
-}
-
-/** Default milestones: ×2 at 3-in-a-row, ×3 at 5-in-a-row. */
-export const DEFAULT_MILESTONES: StreakMilestone[] = [
-  { at: 3, multiplier: 2 },
-  { at: 5, multiplier: 3 },
-]
 
 export interface ScoreState {
   /** Running session score. */
   total: number
   /** Consecutive correct answers since last error. */
   streak: number
-  /** Current streak multiplier. */
+  /** Current streak multiplier: 1 + streak / 10. */
   multiplier: number
   /** Number of errors in the session. */
   errors: number
@@ -46,24 +31,27 @@ export function initialScoreState(): ScoreState {
 // ── Core ──────────────────────────────────────────────────────────────────────
 
 /**
+ * Continuous streak multiplier: 1 + streak / 10.
+ * streak 0 → ×1.0, streak 5 → ×1.5, streak 10 → ×2.0, etc.
+ */
+export function streakMultiplier(streak: number): number {
+  return 1 + streak / 10
+}
+
+/**
  * Returns a new ScoreState after a correct answer.
  *
- * Score = round((10 + speedBonus) × multiplier)
- * speedBonus = 10 × 0.5^(ms / 3000)  — halves every 3 s, ranges 10 → 0
+ * points = round((1 + speedBonus) × streakMultiplier(streak))
+ * speedBonus = 0.5^(ms / 3000)  — halves every 3 s
  *
- * @param state   Current score state
- * @param ms      Response time in milliseconds
- * @param milestones  Streak milestone config (default: DEFAULT_MILESTONES)
+ * @param state  Current score state
+ * @param ms     Response time in milliseconds
  */
-export function onCorrect(
-  state: ScoreState,
-  ms: number,
-  milestones: StreakMilestone[] = DEFAULT_MILESTONES,
-): ScoreState {
+export function onCorrect(state: ScoreState, ms: number): ScoreState {
   const streak = state.streak + 1
-  const multiplier = resolveMultiplier(streak, milestones)
-  const speedBonus = 10 * Math.pow(0.5, ms / 3000)
-  const points = Math.round((10 + speedBonus) * multiplier)
+  const multiplier = streakMultiplier(streak)
+  const speedBonus = Math.pow(0.5, ms / 3000)
+  const points = Math.round((1 + speedBonus) * multiplier)
   return {
     total: state.total + points,
     streak,
@@ -83,34 +71,4 @@ export function onError(state: ScoreState): ScoreState {
     multiplier: 1,
     errors: state.errors + 1,
   }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Returns the highest multiplier whose milestone has been reached.
- */
-export function resolveMultiplier(
-  streak: number,
-  milestones: StreakMilestone[],
-): number {
-  let multiplier = 1
-  for (const m of milestones) {
-    if (streak >= m.at) multiplier = m.multiplier
-  }
-  return multiplier
-}
-
-/**
- * Returns the next milestone the player is heading toward, or null if
- * they are already at the highest milestone.
- */
-export function nextMilestone(
-  streak: number,
-  milestones: StreakMilestone[],
-): StreakMilestone | null {
-  for (const m of [...milestones].sort((a, b) => a.at - b.at)) {
-    if (streak < m.at) return m
-  }
-  return null
 }

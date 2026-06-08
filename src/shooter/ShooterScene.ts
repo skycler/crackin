@@ -313,15 +313,14 @@ export class ShooterScene extends Phaser.Scene {
 
   private handleCorrect(tile: TileData): void {
     const ms = Date.now() - this.roundStartMs
-    const prev = this.scoreState
     this.scoreState = scoreOnCorrect(this.scoreState, ms)
 
     this.scoreText.setText(`score: ${this.scoreState.total}`)
     this.updateStreakHud()
 
-    // Milestone celebration
-    if (this.scoreState.multiplier > prev.multiplier) {
-      this.celebrateMilestone(this.scoreState.multiplier)
+    // Celebrate every 5-streak milestone
+    if (this.scoreState.streak % 5 === 0) {
+      this.celebrateMilestone(this.scoreState.streak)
     }
 
     this.flashText(tile.container.x, tile.container.y, '✓', '#00ff88')
@@ -357,13 +356,13 @@ export class ShooterScene extends Phaser.Scene {
       this.streakText.setText('')
       return
     }
-    this.streakText.setText(`streak: ${streak} (x${multiplier})`)
+    this.streakText.setText(`streak: ${streak} (x${multiplier.toFixed(1)})`)
   }
 
-  private celebrateMilestone(multiplier: number): void {
+  private celebrateMilestone(streak: number): void {
     const { width, height } = this.scale
     const t = this.add
-      .text(width / 2, height / 2, `×${multiplier} streak!`, {
+      .text(width / 2, height / 2, `${streak} in a row!`, {
         fontSize: '64px',
         fontFamily: 'monospace',
         color: '#ffd166',
