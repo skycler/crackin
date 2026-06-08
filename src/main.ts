@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 import { BootScene } from './scenes/BootScene'
+import { ShooterScene } from './shooter/ShooterScene'
+import { SessionEndScene } from './scenes/SessionEndScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -11,7 +13,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 960,
     height: 540,
   },
-  scene: [BootScene],
+  scene: [BootScene, ShooterScene, SessionEndScene],
   input: {
     activePointers: 3,
   },

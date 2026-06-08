@@ -62,9 +62,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   private onAnyInput(): void {
-    this.inputIndicator.setText('input registered')
+    this.inputIndicator.setText('loading...')
     this.inputIndicator.setColor('#00ff88')
     this.inputIndicator.setAlpha(1)
     this.tweens.killTweensOf(this.inputIndicator)
+    this.time.delayedCall(200, () => this.scene.start('ShooterScene'))
   }
 }
